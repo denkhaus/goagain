@@ -34,6 +34,16 @@ const (
 	SIGUSR2 = syscall.SIGUSR2
 )
 
+// Logger mimics golang's standard Logger as an interface.
+type Logger interface {
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
+	Fatalln(args ...interface{})
+	Print(args ...interface{})
+	Printf(format string, args ...interface{})
+	Println(args ...interface{})
+}
+
 var (
 	// OnSIGHUP is the function called when the server receives a SIGHUP
 	// signal. The normal use case for SIGHUP is to reload the
@@ -48,17 +58,16 @@ var (
 	// The strategy to use; Single by default.
 	Strategy strategy = Single
 
-	Logger *log.Logger
+	logger Logger
 )
 
 func init() {
-	Logger = log.New(os.Stderr, "", log.LstdFlags)
+	logger = log.New(os.Stderr, "", log.LstdFlags)
 }
 
-func logln(v ...interface{}) {
-	if Logger != nil {
-		Logger.Println(v...)
-	}
+// SetLogger sets the logger that is used in goagain.
+func SetLogger(l Logger) {
+	logger = l
 }
 
 // Re-exec this same image without dropping the net.Listener.
@@ -81,7 +90,7 @@ func Exec(l net.Listener) error {
 	); nil != err {
 		return err
 	}
-	logln("re-executing", argv0)
+	logger.Println("re-executing", argv0)
 	return syscall.Exec(argv0, os.Args, os.Environ())
 }
 
@@ -135,7 +144,7 @@ func ForkExec(l net.Listener) error {
 	if nil != err {
 		return err
 	}
-	logln("spawned child", p.Pid)
+	logger.Println("spawned child", p.Pid)
 	if err = os.Setenv("GOAGAIN_PID", fmt.Sprint(p.Pid)); nil != err {
 		return err
 	}
@@ -171,7 +180,7 @@ func Kill() error {
 	if syscall.SIGQUIT == sig && Double == Strategy {
 		go syscall.Wait4(pid, nil, 0, nil)
 	}
-	logln("sending signal", sig, "to process", pid)
+	logger.Println("sending signal", sig, "to process", pid)
 	return syscall.Kill(pid, sig)
 }
 
@@ -218,14 +227,14 @@ func Wait(l net.Listener) (syscall.Signal, error) {
 	forked := false
 	for {
 		sig := <-ch
-		logln(sig.String())
+		logger.Println(sig.String())
 		switch sig {
 
 		// SIGHUP should reload configuration.
 		case syscall.SIGHUP:
 			if nil != OnSIGHUP {
 				if err := OnSIGHUP(l); nil != err {
-					logln("OnSIGHUP:", err)
+					logger.Println("OnSIGHUP:", err)
 				}
 			}
 
@@ -245,7 +254,7 @@ func Wait(l net.Listener) (syscall.Signal, error) {
 		case syscall.SIGUSR1:
 			if nil != OnSIGUSR1 {
 				if err := OnSIGUSR1(l); nil != err {
-					logln("OnSIGUSR1:", err)
+					logger.Println("OnSIGUSR1:", err)
 				}
 			}
 

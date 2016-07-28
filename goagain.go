@@ -55,9 +55,15 @@ var (
 	// log files.
 	OnSIGUSR1 func(l net.Listener) error
 
+	// OnBeforeSIGUSR2 is the function called when the server receives a
+	// SIGUSR2 signal for the first time and before a fork is processed.
+	// This is normaly used to close resoures that are used in the forked process.
+	OnBeforeSIGUSR2 func(l net.Listener) error
+
 	// The strategy to use; Single by default.
 	Strategy strategy = Single
 
+	// as a logger interface, compatible with log.Logger, to roll your own.
 	logger Logger
 )
 
@@ -264,6 +270,13 @@ func Wait(l net.Listener) (syscall.Signal, error) {
 			if forked {
 				return syscall.SIGUSR2, nil
 			}
+
+			if nil != OnBeforeSIGUSR2 {
+				if err := OnBeforeSIGUSR2(l); nil != err {
+					logger.Println("OnBeforeSIGUSR2:", err)
+				}
+			}
+
 			forked = true
 			if err := ForkExec(l); nil != err {
 				return syscall.SIGUSR2, err
